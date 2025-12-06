@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>角色屬性計算器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        function getStat(id) {
+            if(id.startsWith("ex")) {
+                return Math.max(0, (parseInt(document.getElementById(id).value) || 0));
+            } else {
+                return Math.max(0, (parseInt(document.getElementById(id).value) || 0) - 4);
+            }
+        }
+
+        function getCost(stat) {
+            // if (stat <= 0) return 0;
+
+            let cost = 0;
+            stat += 4;
+
+            if (stat > 79) {
+                cost += (stat - 79) * 5;
+                stat = 79;
+            }
+            if (stat > 59) {
+                cost += (stat - 59) * 4;
+                stat = 59;
+            }
+            if (stat > 39) {
+                cost += (stat - 39) * 3;
+                stat = 39;
+            }
+            if (stat > 19) {
+                cost += (stat - 19) * 2;
+                stat = 19;
+            }
+            cost += stat * 1;
+            // console.log("cost = " + cost);
+            return cost;
+        }
+
+        function getNextCost(stat) {
+            stat += 4;
+            if (stat < 20) return 1;
+            if (stat < 40) return 2;
+            if (stat < 60) return 3;
+            if (stat < 80) return 4;
+            return 5;
+        }
+
+        function getTotalPoints(level) {
+            const pointsPerLevel = 5;
+            return (level - 1) * pointsPerLevel + 10;
+        }
+
+        function enforceMinStat(id) {
+            const input = document.getElementById(id);
+            if ((parseInt(input.value) || 0) < 4) input.value = 4;
+        }
+
+        function enforceMaxPoints(id) {
+            const input = document.getElementById(id);
+            let value = parseInt(input.value) || 4;
+
+            // 從基礎值 4 算投資點數
+            let invested = value - 4;
+
+            // 計算其他能力值消耗的點數
+            let otherUsed = 0;
+            ["atk", "vit", "agi", "int"].forEach(statId => {
+                if (statId !== id) {
+                    let otherInvested = (parseInt(document.getElementById(statId).value) || 4) - 4;
+                    otherUsed += getCost(otherInvested);
+                }
+            });
+
+            const level = parseInt(document.getElementById("level").value) || 1;
+            const totalPoints = getTotalPoints(level);
+
+            // 逐步減少這個能力值，直到下一點的需求成本 <= 剩餘點數
+            while (invested > 0 && getNextCost(invested) + otherUsed > totalPoints) {
+                invested--;
+            }
+
+            input.value = invested + 4; // 回填真實能力值
+        }
+
+        function calculate() {
+            // 防呆：保證每個能力值 ≥ 4
+            ["atk", "vit", "agi", "int"].forEach(enforceMinStat);
+
+            // 限制不能超過剩餘點數
+            // ["atk", "vit", "agi", "int"].forEach(enforceMaxPoints);
+
+            const level = parseInt(document.getElementById("level").value) || 1;
+            const atk = getStat("atk");
+            const vit = getStat("vit");
+            const agi = getStat("agi");
+            const int = getStat("int");
+            const totalPoints = getTotalPoints(level);
+            // 計算消耗
+            // console.log("atk = " + atk);
+            const usedPoints = getCost(atk) + getCost(vit) + getCost(agi) + getCost(int) - 16;
+            // console.log("usedPoints = " + usedPoints);
+            const remaining = totalPoints - usedPoints;
+
+            const ex_atk = getStat("ex_atk");
+            const ex_vit = getStat("ex_vit");
+            const ex_agi = getStat("ex_agi");
+            const ex_int = getStat("ex_int");
+
+            // === 基礎數值 ===
+            let minAtk = 3;
+            let maxAtk = 5;
+            let hpMax = 110 + (level - 1) * 10;
+            let hpRegen = 20;
+            let mpMax = 58 + (level - 1) * 10;
+            let mpRegen = 24;
+            let hitRate = 81.0 + (level - 1) * (-0.2);
+            let dodgeRate = 21.1 + (level - 1) * (-0.1);
+            let critRate = 10.4;
+            let skillCDR = 0;
+
+            // === 攻擊 ===
+            maxAtk += Math.floor((atk +  ex_atk) / 2);
+            minAtk += Math.floor((atk + ex_atk) / 5);
+
+            // === 體質 ===
+            hpMax += (vit + ex_vit) * 16;
+            hpRegen += Math.floor((vit + ex_vit) / 2) * 2;
+
+            // === 敏捷 ===
+            hitRate += (agi + ex_agi) * 0.3;
+            dodgeRate += (agi + ex_agi) * 0.3;
+            critRate += (agi + ex_agi) * 0.1;
+
+            // === 智力 ===
+            mpMax += (int + ex_int) * 12;
+            mpRegen += (int + ex_int) * 2;
+            skillCDR += Math.floor((int + ex_int) / 4) + 1;
+
+            // === 額外裝備部分 ===
+
+            const chb_item_dodgeRate = document.getElementById("chb_item_dodgeRate").checked;
+            if (chb_item_dodgeRate) {
+                const item_dodgeRate = parseInt(document.getElementById("item_dodgeRate").value) || 0;
+                dodgeRate += item_dodgeRate;
+            }
+
+            const chb_item_hitRate = document.getElementById("chb_item_hitRate").checked;
+            if (chb_item_hitRate) {
+                const item_hitRate = parseInt(document.getElementById("item_hitRate").value) || 0;
+                hitRate += item_hitRate;
+            }
+
+            const chb_item_critRate = document.getElementById("chb_item_critRate").checked;
+            if (chb_item_critRate) {
+                const item_critRate = parseInt(document.getElementById("item_critRate").value) || 0;
+                critRate += item_critRate;
+            }
+
+            // === 結果輸出 ===
+            document.getElementById("remaining").value = remaining;
+
+            document.getElementById("atk-need").value = getNextCost(atk);
+            document.getElementById("vit-need").value = getNextCost(vit);
+            document.getElementById("agi-need").value = getNextCost(agi);
+            document.getElementById("int-need").value = getNextCost(int);
+
+            document.getElementById("result").innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">攻擊力</p>
+            <p class="text-gray-700">${minAtk} - ${maxAtk}</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">HP 上限</p>
+            <p class="text-gray-700">${hpMax}</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">HP 回復</p>
+            <p class="text-gray-700">${hpRegen}</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">MP 上限</p>
+            <p class="text-gray-700">${mpMax}</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">MP 回復</p>
+            <p class="text-gray-700">${mpRegen}</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">命中率</p>
+            <p class="text-gray-700">${hitRate.toFixed(1)}%</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">迴避率</p>
+            <p class="text-gray-700">${dodgeRate.toFixed(1)}%</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow">
+            <p class="font-bold text-lg">致命率</p>
+            <p class="text-gray-700">${critRate.toFixed(1)}%</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow col-span-1 md:col-span-2">
+            <p class="font-bold text-lg">技能冷卻縮短</p>
+            <p class="text-gray-700">${skillCDR}%</p>
+          </div>
+          <div class="p-4 bg-white rounded-2xl shadow col-span-1 md:col-span-2">
+            <p class="font-bold text-lg">備註</p>
+            <p class="text-gray-700">1.龍骨 10% or 5% 迴避</p>
+            <p class="text-gray-700">2.迴避頭 + 迴避套裝 = 5% + 5% </p>
+            <p class="text-gray-700">3.徽章 10%</p>
+            <p class="text-gray-700">4.蜃氣樓戒指 5% (通常兩顆 10%)</p>
+            <p class="text-gray-700">5.人影項鍊 命中迴避各 7%</p>
+            <p class="text-gray-700">6.BUFF額外增加30/精靈額外增加8</p>
+          </div>
+        </div>
+      `;
+        }
+    </script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
+<div class="max-w-6xl w-full flex flex-col gap-6">
+    <!-- 規則設定 -->
+    <div class="w-full bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4 text-center">⚙️ 規則設定</h2>
+
+        <ul class="space-y-4">
+            <!-- 1 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">1</span>
+                    <p class="text-gray-700">四大屬性基礎從 <span class="font-semibold">4</span> 開始。</p>
+                </div>
+            </li>
+
+            <!-- 2 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">2</span>
+                    <p class="text-gray-700">角色 <span class="font-semibold">1等</span> 會有 <span class="font-semibold">10 點</span> 可分配。</p>
+                </div>
+            </li>
+
+            <!-- 3 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">3</span>
+                    <p class="text-gray-700">之後每升一等，獲得 <span class="font-semibold">5 點</span> 可分配。</p>
+                </div>
+            </li>
+
+            <!-- 4 攻擊 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">4</span>
+                    <div class="space-y-1">
+                        <p class="text-gray-700">每 <span class="font-semibold">2 點攻擊</span> → 最大攻擊力 +1</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">5 點攻擊</span> → 最小攻擊力 +1</p>
+                        <p class="text-sm text-gray-500 pl-2">※ 四大職業的初始攻擊力皆為 3-5，等級提升時偶爾會提升最小 / 最大攻擊力。</p>
+                    </div>
+                </div>
+            </li>
+
+            <!-- 5 體質 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">5</span>
+                    <div class="space-y-1">
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點體質</span> → HPMax +16</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">2 點體質</span> → HP 回復量 +2</p>
+                        <p class="text-sm text-gray-500 pl-2">※ 初始 HPMax = 110，每升 1 級 HPMax +10，基本回復 = 每次 20 滴。</p>
+                    </div>
+                </div>
+            </li>
+
+            <!-- 6 敏捷 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">6</span>
+                    <div class="space-y-1">
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點敏捷</span> → 命中率 +0.3%</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點敏捷</span> → 迴避率 +0.3%</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點敏捷</span> → 致命率 +0.1%</p>
+                        <p class="text-sm text-gray-500 pl-2">
+                            ※ 初始命中率 81.0%，每升 1 級命中率 -0.2%，初始迴避率 21.1%，每升 1 級迴避率 -0.1%，初始致命率 10.4%，等級提升不影響致命率。
+                        </p>
+                    </div>
+                </div>
+            </li>
+
+            <!-- 7 智力 -->
+            <li>
+                <div class="flex items-start gap-2">
+                    <span class="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 text-gray-700 text-sm font-bold">7</span>
+                    <div class="space-y-1">
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點智力</span> → MPMax +12</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">1 點智力</span> → MP 回復量 +2</p>
+                        <p class="text-gray-700">每 <span class="font-semibold">4 點智力</span> → 技能冷卻時間 -1%</p>
+                        <p class="text-sm text-gray-500 pl-2">
+                            ※ 初始 MPMax = 58，每升 1 級 MPMax +10，基本回復 = 每次 24 滴。
+                        </p>
+                    </div>
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 左邊：角色屬性輸入（直立排列） -->
+    <div class="flex flex-col md:flex-row gap-6">
+        <div class="w-full md:w-1/2 bg-white rounded-2xl shadow-xl p-6 flex flex-col gap-4">
+            <h1 class="text-2xl font-bold mb-4 text-center">角色屬性輸入</h1>
+
+            <!-- 等級 + 剩餘點數 -->
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block font-bold text-gray-700">等級</label>
+                    <input type="number" id="level" value="153" oninput="calculate()"
+                           class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm text-center focus:border-blue-500 focus:ring-blue-500" />
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700">剩餘點數</label>
+                    <input type="number" id="remaining" value="10" readonly
+                           class="mt-1 block w-full rounded-lg border-gray-300 bg-gray-100 text-center shadow-sm" />
+                </div>
+            </div>
+
+            <!-- 四欄屬性表格 -->
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <!-- 標題 -->
+                <div class="font-bold">能力值</div>
+                <div class="font-bold">需求</div>
+                <div class="font-bold">能力</div>
+                <div class="font-bold">增加</div>
+
+                <!-- 攻擊 -->
+                <div>攻擊</div>
+                <input type="number" class="border rounded p-1 bg-gray-100 text-center" id="atk-need" value="1" readonly />
+                <input type="number" min="4" class="border rounded p-1 text-center" id="atk" value="60" oninput="calculate()" />
+                <input type="number" class="border rounded p-1 text-center" value="0" id="ex_atk" oninput="calculate()" />
+
+                <!-- 體質 -->
+                <div>體質</div>
+                <input type="number" class="border rounded p-1 bg-gray-100 text-center" id="vit-need" value="1" readonly />
+                <input type="number" min="4" class="border rounded p-1 text-center" id="vit" value="5" oninput="calculate()" />
+                <input type="number" class="border rounded p-1 text-center" value="0" id="ex_vit" oninput="calculate()" />
+
+                <!-- 敏捷 -->
+                <div>敏捷</div>
+                <input type="number" class="border rounded p-1 bg-gray-100 text-center" id="agi-need" value="1" readonly />
+                <input type="number" min="4" class="border rounded p-1 text-center" id="agi" value="130" oninput="calculate()" />
+                <input type="number" class="border rounded p-1 text-center" value="0" id="ex_agi" oninput="calculate()" />
+
+                <!-- 智力 -->
+                <div>智力</div>
+                <input type="number" class="border rounded p-1 bg-gray-100 text-center" id="int-need" value="1" readonly />
+                <input type="number" min="4" class="border rounded p-1 text-center" id="int" value="80" oninput="calculate()" />
+                <input type="number" class="border rounded p-1 text-center" value="0" id="ex_int" oninput="calculate()" />
+            </div>
+
+            <div class="mt-6 p-4 bg-gray-50 rounded-2xl shadow-inner">
+                <p class="font-bold mb-3 text-gray-700 text-lg">選擇額外效果：</p>
+                <div class="flex flex-col gap-3">
+                    <!-- 裝備迴避率 -->
+                    <label class="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="chb_item_dodgeRate" class="form-checkbox h-5 w-5 text-blue-500" onchange="calculate()" />
+                            <span class="text-gray-800 font-medium">裝備迴避率 ( 最高47% )</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <input type="number" class="border rounded-lg p-1 w-20 text-center" id="item_dodgeRate" placeholder="0" oninput="calculate()" />
+                            <span class="text-gray-700 font-medium">%</span>
+                        </div>
+                    </label>
+
+                    <!-- 裝備命中率 -->
+                    <label class="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="chb_item_hitRate" class="form-checkbox h-5 w-5 text-green-500" onchange="calculate()" />
+                            <span class="text-gray-800 font-medium">裝備命中率</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <input type="number" class="border rounded-lg p-1 w-20 text-center" id="item_hitRate" placeholder="0" oninput="calculate()" />
+                            <span class="text-gray-700 font-medium">%</span>
+                        </div>
+                    </label>
+
+                    <!-- 裝備爆擊率 -->
+                    <label class="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm hover:shadow-md transition">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="chb_item_critRate" class="form-checkbox h-5 w-5 text-purple-500" onchange="calculate()" />
+                            <span class="text-gray-800 font-medium">裝備爆擊率</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <input type="number" class="border rounded-lg p-1 w-20 text-center" id="item_critRate" placeholder="0" oninput="calculate()" />
+                            <span class="text-gray-700 font-medium">%</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右邊：計算結果 -->
+        <div class="w-full md:w-1/2">
+            <h2 class="text-xl font-bold mb-4 text-center">計算結果</h2>
+            <div id="result" class="space-y-4"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    calculate(); // 預設先跑一次
+</script>
+</body>
+</html>
